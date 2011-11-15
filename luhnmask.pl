@@ -1,24 +1,35 @@
 #!perl -w
 use strict;
 
+# Chris Dolan, http://chrisdolan.net/
+#   See http://corner.squareup.com/2011/11/luhny-bin.html
+#   and https://github.com/chrisdolan/luhnybin
+
+# Explanation:
+#   - Find all substrings of 14-16 digits in the line, possibly interleaved with ' ' or '-'
+#   - For each substring, compute the Luhn checksum
+#   - If the checksum is correct, replace all digits in the substring with 'X'
+
+# needed to unblock I/O -- otherwise Perl waits for Java while Java waits for Perl
 *STDOUT->autoflush(1);
 
-my %p;
+my @s;
 while (my $line = <>) {
-   # positions of characters that should become 'X'
-   %p = ();
-   # regex with side effect of marking positions. '(*FAIL)' forces backtracking to find overlapping CCs
-   $line =~ m/((?:\d[\ \-]*){14,16})(?{luhn($1, pos(), \%p)})(?:$|(*FAIL))/gs;
+   # make a copy of the string that's easy to edit
+   @s = $line =~ m/(.)/gs;
 
-   print xx($line, \%p);
+   # regex with side effect of marking positions. '(*FAIL)' forces backtracking to find overlapping CCs
+   # '(?{...})' is a zero-width always-succeeding assertion the executes embedded code
+   $line =~ m/((?:\d[\ \-]*){14,16})(?{luhn($1, pos(), \@s)})(*FAIL)/gs;
+
+   print join '', @s;
 }
 
-# compute the luhn checksum. On success, record the positions of the digits in the $p hash
-# $pos is the offset of the end of the subtring from the beginning of the line
+# compute the luhn checksum. On success, replace the digits in the $s copy of the string with 'X'
+# $pos is the offset of the *end* of the subtring from the beginning of the line
 sub luhn {
-   my ($substr, $pos, $p) = @_;
+   my ($substr, $pos, $s) = @_;
    return if !defined $substr;
-   $pos -= length $substr; # set back to beginning of substr
    my @n = $substr =~ m/(\d)/gs;
 
    # Luhn checksum
@@ -35,20 +46,11 @@ sub luhn {
    }
 
    if (($c % 10) == 0) {
-      for my $d ($substr =~ m/(.)/gs) {
-         if ($d =~ m/\d/) {
-            $p->{$pos} = 1;
+      # Success!
+      for my $i ($pos - length($substr) .. $pos - 1) {
+         if ($s->[$i] =~ m/\d/) {
+            $s->[$i] = 'X';
          }
-         ++$pos;
       }
    }
-}
-
-sub xx {
-   my ($line, $p) = @_;
-   my @s = $line =~ m/(.)/gs;
-   for my $pos (keys %{$p}) {
-      $s[$pos] = 'X';
-   }
-   return join '', @s;
 }
